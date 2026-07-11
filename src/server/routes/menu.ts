@@ -19,7 +19,7 @@ menu.post('/post-create', async (c) => {
     console.error(`Error creating post: ${error}`);
     return c.json<UiResponse>(
       {
-        showToast: 'Failed to create post',
+        showToast: 'Failed to create Iron Empire post',
       },
       400
     );

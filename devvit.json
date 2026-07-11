@@ -20,8 +20,8 @@
   "menu": {
     "items": [
       {
-        "label": "Create a new post",
-        "description": "iron-empire",
+        "label": "Create Iron Empire Post",
+        "description": "Create a new Iron Empire daily workout post",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"

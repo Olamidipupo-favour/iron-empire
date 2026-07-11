@@ -7,26 +7,126 @@
       name="viewport"
       content="initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, width=device-width, height=device-height, user-scalable=0"
     />
-    <title>devvit</title>
+    <title>Iron Empire — Daily Workout</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   </head>
   <body class="app">
-    <img class="snoo" src="/snoo.png" alt="Snoo" />
-    <div class="content">
-      <h1 class="title" id="title"></h1>
-      <p class="description">
-        Edit <span class="code">src/client/splash.ts</span> to get started.
-      </p>
+    <!-- Loading Skeleton -->
+    <div class="loading-container" id="loading-container">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">Entering the Iron Empire…</p>
     </div>
-    <div>
-      <button class="start-button" id="start-button">Start</button>
+
+    <!-- Main Dashboard (hidden until data loads) -->
+    <div class="dashboard" id="dashboard" style="display: none;">
+      <!-- Header -->
+      <div class="header">
+        <div class="header-icon">🏋️</div>
+        <h1 class="header-title">Iron Empire</h1>
+        <p class="header-subtitle" id="greeting"></p>
+      </div>
+
+      <!-- Decay Warning (shown only if decay applied) -->
+      <div class="decay-alert" id="decay-alert" style="display: none;">
+        <span class="decay-icon">⚠️</span>
+        <span class="decay-text" id="decay-text"></span>
+      </div>
+
+      <!-- Status Panel -->
+      <div class="panel status-panel">
+        <div class="panel-header">
+          <span class="panel-label">Your Stats</span>
+          <span class="tier-badge" id="tier-badge"></span>
+        </div>
+
+        <!-- Streak -->
+        <div class="stat-row">
+          <div class="stat-icon" id="streak-flame">🔥</div>
+          <div class="stat-info">
+            <span class="stat-label">Daily Streak</span>
+            <span class="stat-value" id="streak-value">0</span>
+          </div>
+        </div>
+
+        <!-- Weight Progress -->
+        <div class="stat-row">
+          <div class="stat-icon">⚖️</div>
+          <div class="stat-info">
+            <span class="stat-label">Weight</span>
+            <div class="progress-container">
+              <div class="progress-bar" id="weight-bar">
+                <div class="progress-fill" id="weight-fill"></div>
+                <div class="progress-shimmer"></div>
+              </div>
+              <div class="progress-labels">
+                <span id="weight-current">75.0 kg</span>
+                <span class="progress-goal">87.0 kg</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Muscle Mass -->
+        <div class="stat-row">
+          <div class="stat-icon">💪</div>
+          <div class="stat-info">
+            <span class="stat-label">Muscle Mass</span>
+            <div class="progress-container">
+              <div class="progress-bar" id="muscle-bar">
+                <div class="progress-fill" id="muscle-fill"></div>
+                <div class="progress-shimmer"></div>
+              </div>
+              <div class="progress-labels">
+                <span id="muscle-current">15.0</span>
+                <span class="progress-goal">45.0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Points -->
+        <div class="stat-row">
+          <div class="stat-icon">⭐</div>
+          <div class="stat-info">
+            <span class="stat-label">Total Points</span>
+            <span class="stat-value" id="points-value">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Community Panel -->
+      <div class="panel community-panel">
+        <div class="panel-header">
+          <span class="panel-label">Community Gym</span>
+          <span class="gym-tier-badge" id="gym-tier-badge"></span>
+        </div>
+        <div class="gym-name" id="gym-name">Garage Gym</div>
+        <div class="progress-container">
+          <div class="progress-bar gym-bar">
+            <div class="progress-fill gym-fill" id="gym-fill"></div>
+            <div class="progress-shimmer"></div>
+          </div>
+          <div class="progress-labels">
+            <span id="gym-points">0 pts</span>
+            <span id="gym-next">1,000 pts to next tier</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button class="action-button" id="start-button">
+        <span class="action-icon">⚡</span>
+        <span class="action-text">Start Daily Routine</span>
+      </button>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <span class="footer-text">Powered by Devvit</span>
+      </footer>
     </div>
-    <footer class="footer">
-      <div class="docs-link" tabindex="0" id="docs-link">Docs</div>
-      <span class="divider">|</span>
-      <div class="docs-link" tabindex="0" id="playtest-link">r/Devvit</div>
-      <span class="divider">|</span>
-      <div class="docs-link" tabindex="0" id="discord-link">Discord</div>
-    </footer>
+
     <script type="module" src="splash.ts" defer></script>
   </body>
 </html>
