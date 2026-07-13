@@ -1,5 +1,6 @@
 import { Boot } from './scenes/Boot';
 import { Preloader } from './scenes/Preloader';
+import { DifficultyScene } from './scenes/DifficultyScene';
 import { WorkoutScene } from './scenes/WorkoutScene';
 import { ResultsScene } from './scenes/ResultsScene';
 import * as Phaser from 'phaser';
@@ -15,7 +16,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 1024,
     height: 768,
   },
-  scene: [Boot, Preloader, WorkoutScene, ResultsScene],
+  scene: [Boot, Preloader, DifficultyScene, WorkoutScene, ResultsScene],
 };
 
 const StartGame = (parent: string) => {

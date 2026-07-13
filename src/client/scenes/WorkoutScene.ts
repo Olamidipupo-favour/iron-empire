@@ -1,28 +1,22 @@
 import { Scene } from 'phaser';
 import * as Phaser from 'phaser';
+import type { DifficultyLevel } from './DifficultyScene';
 
 // ---- Types ----
-
-type CueSprite = Phaser.GameObjects.Image & {
-  lane: number;
-  scored: boolean;
-};
 
 type HitRating = 'perfect' | 'good' | 'ok' | 'miss';
 
 // ---- Constants ----
 
-const BASE_DROP_SPEED = 200; // px/s
-const TARGET_ZONE_Y_RATIO = 0.8; // 80% down the screen
-const CUE_COUNT_STANDARD = 30;
-const CUE_COUNT_FRIDAY = 45;
-const FRIDAY_SPEED_MULTIPLIER = 1.5;
+const REPS_STANDARD = 30;
+const REPS_FRIDAY = 45;
+const FRIDAY_SPEED_MULTIPLIER = 1.3;
 const MISS_PENALTY_FRIDAY = 3;
 
 const HIT_THRESHOLDS = {
-  perfect: 15,
-  good: 30,
-  ok: 50,
+  perfect: 20, // distance from center of meter
+  good: 45,
+  ok: 80,
 } as const;
 
 const HIT_SCORES = {
@@ -33,53 +27,60 @@ const HIT_SCORES = {
 } as const;
 
 /**
- * WorkoutScene: The rhythm/timing-based minigame.
+ * WorkoutScene: The rhythm/timing-based lifting minigame.
  *
- * Cues (dumbbells/plates) fall from top to a target zone.
- * Player taps when the cue reaches the zone for accuracy points.
- *
- * Friday Modified Circuit:
- *   - Dual lanes
- *   - 1.5x speed
- *   - 45 cues
- *   - Strict miss penalty
+ * Replaces falling cues with a visual Avatar and Barbell.
+ * A swinging Power Meter at the bottom dictates accuracy.
+ * Tapping stops the meter, animates the lift, and resumes.
  */
 export class WorkoutScene extends Scene {
+  // Config
+  private tier: string = 'novice';
+  private isFridayCircuit: boolean = false;
+  private totalReps: number = REPS_STANDARD;
+  private maxPossibleScore: number = 0;
+  private needleSpeed: number = 600; // ms per half-swing
+  private difficulty: DifficultyLevel = 'standard';
+
   // State
-  private activeCues: CueSprite[] = [];
-  private totalCues: number = CUE_COUNT_STANDARD;
-  private spawnedCount: number = 0;
+  private currentRep: number = 0;
   private hitCount: number = 0;
   private missCount: number = 0;
   private rawScore: number = 0;
-  private maxPossibleScore: number = 0;
-  private isFridayCircuit: boolean = false;
-  private dropSpeed: number = BASE_DROP_SPEED;
-  private targetZoneY: number = 0;
-  private lanes: number[] = [];
   private isCountingDown: boolean = true;
+  private isAnimatingRep: boolean = false;
   private isComplete: boolean = false;
 
+  // Game Objects
+  private avatarImage!: Phaser.GameObjects.Image;
+  private barbellContainer!: Phaser.GameObjects.Container;
+  private needle!: Phaser.GameObjects.Rectangle;
+  private needleTween!: Phaser.Tweens.Tween;
+
   // UI Elements
-  private scoreText: Phaser.GameObjects.Text;
-  private comboText: Phaser.GameObjects.Text;
-  private progressText: Phaser.GameObjects.Text;
-  private circuitLabel: Phaser.GameObjects.Text;
-  private targetZone: Phaser.GameObjects.Image;
-  private countdownText: Phaser.GameObjects.Text;
+  private scoreText!: Phaser.GameObjects.Text;
+  private progressText!: Phaser.GameObjects.Text;
+  private feedbackText!: Phaser.GameObjects.Text;
+  private countdownText!: Phaser.GameObjects.Text;
+
+  // Layout params
+  private meterX: number = 0;
+  private meterY: number = 0;
+  private meterWidth: number = 0;
 
   constructor() {
     super('WorkoutScene');
   }
 
-  init(): void {
-    this.activeCues = [];
-    this.spawnedCount = 0;
+  init(data: { tier?: string, difficulty?: DifficultyLevel }): void {
+    this.tier = data.tier ?? 'novice';
+    this.difficulty = data.difficulty ?? 'standard';
+    this.currentRep = 0;
     this.hitCount = 0;
     this.missCount = 0;
     this.rawScore = 0;
-    this.maxPossibleScore = 0;
     this.isCountingDown = true;
+    this.isAnimatingRep = false;
     this.isComplete = false;
   }
 
@@ -91,147 +92,162 @@ export class WorkoutScene extends Scene {
     this.isFridayCircuit = today.getDay() === 5; // 0=Sun, 5=Fri
 
     // Configure based on circuit type
-    this.totalCues = this.isFridayCircuit ? CUE_COUNT_FRIDAY : CUE_COUNT_STANDARD;
+    this.totalReps = this.isFridayCircuit ? REPS_FRIDAY : REPS_STANDARD;
+    this.maxPossibleScore = this.totalReps * HIT_SCORES.perfect;
 
-    // Day-seeded speed variation (±20%)
     const daySeed = today.getFullYear() * 1000 + today.getMonth() * 31 + today.getDate();
-    const speedVariation = 0.8 + (((daySeed * 7 + 13) % 40) / 100); // 0.80 → 1.19
-    this.dropSpeed = BASE_DROP_SPEED * speedVariation;
+    const speedVariation = 0.8 + (((daySeed * 7 + 13) % 40) / 100);
+    
+    // Slow down the overall speed (base changed from 700 to 1100)
+    // Beginner gains: Novices get a slower meter (easier). 
+    let tierModifier = 1.0;
+    if (this.tier === 'novice') tierModifier = 1.4;
+    else if (this.tier === 'athlete') tierModifier = 1.2;
+    
+    let difficultyModifier = 1.0;
+    if (this.difficulty === 'light') difficultyModifier = 1.2;
+    else if (this.difficulty === 'heavy') difficultyModifier = 0.8;
+    
+    this.needleSpeed = 1100 * speedVariation * tierModifier * difficultyModifier; // Base swing speed
 
     if (this.isFridayCircuit) {
-      this.dropSpeed *= FRIDAY_SPEED_MULTIPLIER;
+      this.needleSpeed /= FRIDAY_SPEED_MULTIPLIER; // Faster swing
     }
 
-    // Max possible score
-    this.maxPossibleScore = this.totalCues * HIT_SCORES.perfect;
+    // ---- Background & Env ----
+    this.cameras.main.setBackgroundColor(0x0d0d0d);
 
-    // Lanes
+    // Grunge texture background (simulated via dots)
+    const dotGfx = this.add.graphics();
+    dotGfx.fillStyle(0xffffff, 0.02);
+    for (let i = 0; i < 200; i++) {
+      dotGfx.fillCircle(Math.random() * width, Math.random() * height, Math.random() * 2);
+    }
+
+    // Circuit Label
     if (this.isFridayCircuit) {
-      this.lanes = [width * 0.33, width * 0.66]; // Dual lane
-    } else {
-      this.lanes = [width * 0.5]; // Single lane
-    }
-
-    this.targetZoneY = height * TARGET_ZONE_Y_RATIO;
-
-    // ---- Background ----
-    this.cameras.main.setBackgroundColor(0x0a0a0f);
-
-    // Subtle grid lines
-    const gridGfx = this.add.graphics();
-    gridGfx.lineStyle(1, 0x4a7cff, 0.04);
-    for (let x = 0; x < width; x += 60) {
-      gridGfx.lineBetween(x, 0, x, height);
-    }
-    for (let y = 0; y < height; y += 60) {
-      gridGfx.lineBetween(0, y, width, y);
-    }
-
-    // Lane indicators (for Friday dual-lane)
-    if (this.isFridayCircuit) {
-      const laneGfx = this.add.graphics();
-      laneGfx.lineStyle(1, 0x4a7cff, 0.1);
-      laneGfx.lineBetween(width * 0.5, 0, width * 0.5, height);
-
-      // Lane labels
-      this.add.text(width * 0.33, 30, 'L', {
-        fontFamily: 'Inter, Arial, sans-serif',
+      this.add.text(width / 2, 40, '🔥 HEAVY SQUAT DAY 🔥', {
+        fontFamily: '"Press Start 2P", monospace',
         fontSize: '14px',
-        color: '#4a7cff',
-      }).setOrigin(0.5).setAlpha(0.3);
-
-      this.add.text(width * 0.66, 30, 'R', {
-        fontFamily: 'Inter, Arial, sans-serif',
-        fontSize: '14px',
-        color: '#4a7cff',
-      }).setOrigin(0.5).setAlpha(0.3);
+        color: '#ef5350',
+        fontStyle: 'normal',
+      }).setOrigin(0.5).setAlpha(0.8);
     }
 
-    // ---- Target Zone ----
-    this.targetZone = this.add
-      .image(width / 2, this.targetZoneY, 'target_zone')
-      .setDisplaySize(width, 60)
-      .setAlpha(0.8);
+    // ---- Visual Character ----
+    const avatarY = height / 2 - 40;
+    this.avatarImage = this.add.image(width / 2, avatarY, `avatar_${this.tier}`);
+    this.avatarImage.setScale(1.2); // Make lifter prominent
 
-    // Target zone pulsing
+    // Pulse aura behind avatar
+    const auraColor = this.tier === 'vtaper' ? 0xf39c12 : this.tier === 'athlete' ? 0x7f8c8d : 0xc4a265;
+    const aura = this.add.circle(width / 2, avatarY + 20, 100, auraColor, 0.1);
     this.tweens.add({
-      targets: this.targetZone,
-      alpha: { from: 0.5, to: 0.9 },
-      duration: 800,
+      targets: aura,
+      scale: 1.2,
+      alpha: 0.05,
+      duration: 1500,
       yoyo: true,
       repeat: -1,
-      ease: 'Sine.easeInOut',
     });
 
-    // ---- Cues managed via activeCues array ----
+    // Bring avatar to front above aura
+    this.avatarImage.setDepth(2);
 
-    // ---- UI: Score ----
-    this.scoreText = this.add
-      .text(16, 16, 'Score: 0', {
-        fontFamily: 'Inter, Arial, sans-serif',
-        fontSize: '18px',
-        color: '#ffd54f',
-        fontStyle: 'bold',
-      })
-      .setDepth(10);
+    // ---- Barbell ----
+    this.barbellContainer = this.add.container(width / 2, avatarY + 50);
+    this.barbellContainer.setDepth(3);
 
-    // ---- UI: Combo / Rating ----
-    this.comboText = this.add
-      .text(width / 2, this.targetZoneY - 50, '', {
-        fontFamily: 'Inter, Arial, sans-serif',
-        fontSize: '22px',
-        color: '#66bb6a',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(10)
-      .setAlpha(0);
+    // Draw barbell graphics
+    const barGfx = this.add.graphics();
+    // The bar itself
+    barGfx.fillStyle(0x7f8c8d, 1);
+    barGfx.fillRect(-120, -4, 240, 8);
+    
+    // The plates
+    const plateColor = this.isFridayCircuit ? 0xc0392b : 0x333333;
+    // Left plate
+    barGfx.fillStyle(plateColor, 1);
+    barGfx.fillRoundedRect(-100, -25, 20, 50, 4);
+    barGfx.fillStyle(0x111111, 1);
+    barGfx.fillRoundedRect(-95, -20, 10, 40, 2);
+    
+    // Right plate
+    barGfx.fillStyle(plateColor, 1);
+    barGfx.fillRoundedRect(80, -25, 20, 50, 4);
+    barGfx.fillStyle(0x111111, 1);
+    barGfx.fillRoundedRect(85, -20, 10, 40, 2);
 
-    // ---- UI: Progress ----
-    this.progressText = this.add
-      .text(width - 16, 16, `0 / ${this.totalCues}`, {
-        fontFamily: 'Inter, Arial, sans-serif',
-        fontSize: '14px',
-        color: '#8a8ea8',
-      })
-      .setOrigin(1, 0)
-      .setDepth(10);
+    this.barbellContainer.add(barGfx);
 
-    // ---- UI: Circuit Label ----
-    if (this.isFridayCircuit) {
-      this.circuitLabel = this.add
-        .text(width / 2, 50, '⚡ MODIFIED FRIDAY CIRCUIT ⚡', {
-          fontFamily: 'Inter, Arial, sans-serif',
-          fontSize: '16px',
-          color: '#ef5350',
-          fontStyle: 'bold',
-        })
-        .setOrigin(0.5)
-        .setDepth(10);
+    // ---- Power Meter ----
+    this.meterWidth = Math.min(width * 0.8, 320);
+    this.meterX = width / 2;
+    this.meterY = height - 100;
 
-      // Pulsing red glow
-      this.tweens.add({
-        targets: this.circuitLabel,
-        alpha: { from: 0.7, to: 1 },
-        duration: 600,
-        yoyo: true,
-        repeat: -1,
-      });
-    }
+    const meterBg = this.add.graphics();
+    meterBg.setDepth(4);
+    
+    // Red zones (edges)
+    meterBg.fillStyle(0xc0392b, 0.8);
+    meterBg.fillRect(this.meterX - this.meterWidth / 2, this.meterY - 10, this.meterWidth, 20);
 
-    // ---- Input: Tap anywhere to score ----
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.isCountingDown || this.isComplete) return;
-      this.handleTap(pointer.x, pointer.y);
+    // Yellow zones (mid)
+    meterBg.fillStyle(0xf39c12, 0.8);
+    meterBg.fillRect(this.meterX - HIT_THRESHOLDS.ok, this.meterY - 10, HIT_THRESHOLDS.ok * 2, 20);
+
+    // Green zone (center perfect)
+    meterBg.fillStyle(0x27ae60, 0.8);
+    meterBg.fillRect(this.meterX - HIT_THRESHOLDS.perfect, this.meterY - 10, HIT_THRESHOLDS.perfect * 2, 20);
+
+    // Center line
+    meterBg.fillStyle(0xffffff, 1);
+    meterBg.fillRect(this.meterX - 1, this.meterY - 14, 2, 28);
+
+    // Outline
+    meterBg.lineStyle(2, 0x333333, 1);
+    meterBg.strokeRect(this.meterX - this.meterWidth / 2, this.meterY - 10, this.meterWidth, 20);
+
+    // Needle
+    this.needle = this.add.rectangle(this.meterX - this.meterWidth / 2, this.meterY, 6, 32, 0xffffff);
+    this.needle.setDepth(5);
+    this.needle.setStrokeStyle(1, 0x000000);
+
+    // Setup Needle Tween (Paused initially)
+    this.needleTween = this.tweens.add({
+      targets: this.needle,
+      x: this.meterX + this.meterWidth / 2,
+      duration: this.needleSpeed,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+      paused: true,
+    });
+
+    // ---- UI Text ----
+    this.scoreText = this.add.text(16, 16, 'Reps: 0', {
+      fontFamily: '"VT323", monospace', fontSize: '24px',
+      color: '#e67e22', fontStyle: 'normal',
+    }).setDepth(10);
+
+    this.progressText = this.add.text(width - 16, 16, `0 / ${this.totalReps}`, {
+      fontFamily: '"VT323", monospace', fontSize: '20px',
+      color: '#999999',
+    }).setOrigin(1, 0).setDepth(10);
+
+    this.feedbackText = this.add.text(width / 2, this.meterY - 50, '', {
+      fontFamily: '"Press Start 2P", monospace', fontSize: '20px',
+      color: '#ffffff', fontStyle: 'normal', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(10).setAlpha(0);
+
+    // ---- Input ----
+    this.input.on('pointerdown', () => {
+      if (this.isCountingDown || this.isComplete || this.isAnimatingRep) return;
+      this.handleTap();
     });
 
     // ---- Countdown ----
     this.startCountdown();
-
-    // ---- Responsive ----
-    this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
-      this.handleResize(gameSize.width, gameSize.height);
-    });
   }
 
   // ---- Countdown ----
@@ -240,15 +256,10 @@ export class WorkoutScene extends Scene {
     this.isCountingDown = true;
     const { width, height } = this.scale;
 
-    this.countdownText = this.add
-      .text(width / 2, height * 0.45, '3', {
-        fontFamily: 'Inter, Arial, sans-serif',
-        fontSize: '72px',
-        color: '#4a7cff',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(20);
+    this.countdownText = this.add.text(width / 2, height * 0.4, '3', {
+      fontFamily: '"Press Start 2P", monospace', fontSize: '60px',
+      color: '#e67e22', fontStyle: 'normal', stroke: '#000000', strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(20);
 
     const countSequence = ['3', '2', '1', 'LIFT!'] as const;
     let idx = 0;
@@ -263,32 +274,29 @@ export class WorkoutScene extends Scene {
           if (text !== undefined) {
             this.countdownText.setText(text);
             if (text === 'LIFT!') {
-              this.countdownText.setColor('#ffd54f');
+              this.countdownText.setColor('#f39c12');
               this.countdownText.setFontSize(48);
             }
           }
 
-          // Pop animation
           this.tweens.add({
             targets: this.countdownText,
-            scaleX: { from: 1.3, to: 1 },
-            scaleY: { from: 1.3, to: 1 },
+            scaleX: { from: 1.4, to: 1 },
+            scaleY: { from: 1.4, to: 1 },
             duration: 200,
             ease: 'Back.easeOut',
           });
         }
 
         if (idx === countSequence.length - 1) {
-          // Fade out and start
           this.time.delayedCall(500, () => {
             this.tweens.add({
               targets: this.countdownText,
-              alpha: 0,
-              duration: 200,
+              alpha: 0, duration: 200,
               onComplete: () => {
                 this.countdownText.destroy();
                 this.isCountingDown = false;
-                this.startSpawning();
+                this.needleTween.resume();
               },
             });
           });
@@ -297,118 +305,29 @@ export class WorkoutScene extends Scene {
     });
   }
 
-  // ---- Spawning ----
+  // ---- Logic ----
 
-  private startSpawning(): void {
-    const interval = this.isFridayCircuit ? 600 : 900; // ms between spawns
+  private handleTap(): void {
+    this.isAnimatingRep = true;
+    this.needleTween.pause();
 
-    this.time.addEvent({
-      delay: interval,
-      repeat: this.totalCues - 1,
-      callback: () => {
-        this.spawnCue();
-      },
-    });
-  }
-
-  private spawnCue(): void {
-    if (this.spawnedCount >= this.totalCues) return;
-
-    const laneIdx = this.isFridayCircuit
-      ? Math.floor(Math.random() * this.lanes.length)
-      : 0;
-    const x = this.lanes[laneIdx] ?? this.scale.width / 2;
-
-    const textureKey = this.isFridayCircuit ? 'plate' : 'dumbbell';
-    const cue = this.add.image(x, -30, textureKey) as CueSprite;
-    cue.lane = laneIdx;
-    cue.scored = false;
-    cue.setDepth(5);
-
-    // Slight horizontal wobble for visual variety
-    const wobble = (Math.random() - 0.5) * 30;
-    cue.x += wobble;
-
-    this.activeCues.push(cue);
-    this.spawnedCount++;
-    this.progressText.setText(`${this.spawnedCount} / ${this.totalCues}`);
-  }
-
-  // ---- Update Loop ----
-
-  override update(_time: number, delta: number): void {
-    if (this.isCountingDown || this.isComplete) return;
-
-    const { height } = this.scale;
-    const dt = delta / 1000; // Convert ms → seconds
-
-    // Move cues downward
-    for (let i = this.activeCues.length - 1; i >= 0; i--) {
-      const cue = this.activeCues[i];
-      if (!cue) continue;
-
-      cue.y += this.dropSpeed * dt;
-
-      // Missed: fell past target zone
-      if (cue.y > this.targetZoneY + 80 && !cue.scored) {
-        cue.scored = true;
-        this.onMiss(cue);
-      }
-
-      // Off screen: remove
-      if (cue.y > height + 50) {
-        this.activeCues.splice(i, 1);
-        cue.destroy();
-      }
-    }
-
-    // Check if all cues have been processed
-    if (this.spawnedCount >= this.totalCues && this.activeCues.length === 0) {
-      this.completeWorkout();
-    }
-  }
-
-  // ---- Tap Handling ----
-
-  private handleTap(pointerX: number, _pointerY: number): void {
-    // Find the closest unscored cue to the target zone
-    let bestCue: CueSprite | null = null;
-    let bestDist = Infinity;
-
-    for (const cue of this.activeCues) {
-      if (cue.scored) continue;
-
-      const distY = Math.abs(cue.y - this.targetZoneY);
-
-      // For dual-lane, check if tap is on the correct side
-      if (this.isFridayCircuit) {
-        const screenMid = this.scale.width / 2;
-        const tapIsLeft = pointerX < screenMid;
-        const cueIsLeft = cue.lane === 0;
-        if (tapIsLeft !== cueIsLeft) continue; // Wrong lane
-      }
-
-      if (distY < bestDist && distY < 100) {
-        bestDist = distY;
-        bestCue = cue;
-      }
-    }
-
-    if (!bestCue) return; // No cue in range
-
-    bestCue.scored = true;
-    const distToCenter = Math.abs(bestCue.y - this.targetZoneY);
-    const rating = this.getRating(distToCenter);
+    const distFromCenter = Math.abs(this.needle.x - this.meterX);
+    const rating = this.getRating(distFromCenter);
     const points = HIT_SCORES[rating];
 
     this.rawScore += points;
     if (rating !== 'miss') {
       this.hitCount++;
+    } else {
+      this.missCount++;
+      if (this.isFridayCircuit) {
+        this.rawScore = Math.max(0, this.rawScore - MISS_PENALTY_FRIDAY);
+      }
     }
 
-    this.updateScoreUI();
-    this.showRatingFeedback(rating, bestCue.x);
-    this.playCueHitEffect(bestCue, rating);
+    this.updateUI();
+    this.showFeedback(rating);
+    this.animateLifter(rating);
   }
 
   private getRating(distance: number): HitRating {
@@ -418,148 +337,121 @@ export class WorkoutScene extends Scene {
     return 'miss';
   }
 
-  // ---- Miss Handling ----
-
-  private onMiss(cue: CueSprite): void {
-    this.missCount++;
-
-    // Friday penalty
-    if (this.isFridayCircuit) {
-      this.rawScore = Math.max(0, this.rawScore - MISS_PENALTY_FRIDAY);
-    }
-
-    this.updateScoreUI();
-    this.showRatingFeedback('miss', cue.x);
-
-    // Miss flash effect
-    this.tweens.add({
-      targets: cue,
-      alpha: 0,
-      scaleX: 0.3,
-      scaleY: 0.3,
-      duration: 200,
-      ease: 'Power2',
-    });
+  private updateUI(): void {
+    this.scoreText.setText(`Reps: ${this.rawScore}`);
+    this.progressText.setText(`${this.currentRep + 1} / ${this.totalReps}`);
   }
 
-  // ---- Visual Feedback ----
-
-  private showRatingFeedback(rating: HitRating, x: number): void {
-    const colorMap: Record<HitRating, string> = {
-      perfect: '#ffd54f',
-      good: '#66bb6a',
-      ok: '#8a8ea8',
-      miss: '#ef5350',
+  private showFeedback(rating: HitRating): void {
+    const labels: Record<HitRating, string> = {
+      perfect: 'CLEAN!',
+      good: 'GOOD',
+      ok: 'SLOPPY',
+      miss: 'FAILED REP',
+    };
+    const colors: Record<HitRating, string> = {
+      perfect: '#f39c12',
+      good: '#27ae60',
+      ok: '#999999',
+      miss: '#c0392b',
     };
 
-    const labelMap: Record<HitRating, string> = {
-      perfect: '✨ PERFECT',
-      good: '👍 GOOD',
-      ok: 'OK',
-      miss: '❌ MISS',
-    };
-
-    this.comboText.setText(labelMap[rating]);
-    this.comboText.setColor(colorMap[rating]);
-    this.comboText.setPosition(x, this.targetZoneY - 50);
-    this.comboText.setAlpha(1);
-    this.comboText.setScale(1);
+    this.feedbackText.setText(labels[rating]);
+    this.feedbackText.setColor(colors[rating]);
+    this.feedbackText.setAlpha(1);
+    this.feedbackText.setScale(0.5);
+    this.feedbackText.setY(this.meterY - 40);
 
     this.tweens.add({
-      targets: this.comboText,
+      targets: this.feedbackText,
+      y: this.meterY - 80,
       alpha: 0,
-      y: this.targetZoneY - 80,
-      scaleX: 0.8,
-      scaleY: 0.8,
+      scale: 1.2,
       duration: 600,
-      ease: 'Power2',
+      ease: 'Cubic.easeOut',
     });
   }
 
-  private playCueHitEffect(cue: CueSprite, rating: HitRating): void {
-    const particleKey = rating === 'miss' ? 'particle_miss' : 'particle_hit';
+  private animateLifter(rating: HitRating): void {
+    const startY = this.barbellContainer.y;
+    const liftY = startY - 70; // Push bar up
+    
+    if (rating !== 'miss') {
+      // Successful lift animation
+      
+      // Avatar bump to simulate effort
+      this.tweens.add({
+        targets: this.avatarImage,
+        y: this.avatarImage.y + 5,
+        duration: 100,
+        yoyo: true,
+      });
 
-    // Burst particles
-    const emitter = this.add.particles(cue.x, cue.y, particleKey, {
-      speed: { min: 50, max: 150 },
-      scale: { start: 0.8, end: 0 },
-      lifespan: 400,
-      quantity: rating === 'perfect' ? 12 : 6,
-      emitting: false,
-    });
-    emitter.explode();
+      // Barbell goes up then down
+      this.tweens.add({
+        targets: this.barbellContainer,
+        y: liftY,
+        duration: 150,
+        ease: 'Sine.easeOut',
+        yoyo: true,
+        onComplete: () => this.finishRep(),
+      });
 
-    // Destroy after particles finish
-    this.time.delayedCall(500, () => {
-      emitter.destroy();
-    });
-
-    // Scale + fade cue
-    this.tweens.add({
-      targets: cue,
-      alpha: 0,
-      scaleX: rating === 'perfect' ? 1.5 : 1.2,
-      scaleY: rating === 'perfect' ? 1.5 : 1.2,
-      duration: 200,
-      ease: 'Power2',
-      onComplete: () => {
-        const idx = this.activeCues.indexOf(cue);
-        if (idx !== -1) this.activeCues.splice(idx, 1);
-        cue.destroy();
-      },
-    });
+      // Camera slight shake on perfect
+      if (rating === 'perfect') {
+        this.cameras.main.shake(100, 0.005);
+      }
+    } else {
+      // Failed lift animation
+      this.cameras.main.shake(200, 0.01);
+      
+      this.tweens.add({
+        targets: this.barbellContainer,
+        x: this.barbellContainer.x + 10,
+        y: this.barbellContainer.y + 10,
+        duration: 50,
+        yoyo: true,
+        repeat: 3,
+        onComplete: () => {
+          this.barbellContainer.setPosition(this.scale.width / 2, startY);
+          this.finishRep();
+        },
+      });
+    }
   }
 
-  // ---- Score UI ----
+  private finishRep(): void {
+    this.currentRep++;
+    if (this.currentRep >= this.totalReps) {
+      this.completeWorkout();
+    } else {
+      // Resume meter with slight speedup for difficulty curve
+      // Beginner gains: gentler curve for novices
+      let speedup = 1.015;
+      if (this.tier === 'novice') speedup = 1.005;
+      else if (this.tier === 'athlete') speedup = 1.01;
 
-  private updateScoreUI(): void {
-    this.scoreText.setText(`Score: ${this.rawScore}`);
+      this.needleTween.timeScale *= speedup; 
+      this.needleTween.resume();
+      this.isAnimatingRep = false;
+    }
   }
-
-  // ---- Workout Complete ----
 
   private completeWorkout(): void {
-    if (this.isComplete) return;
     this.isComplete = true;
 
-    // Calculate accuracy percentage
     const accuracy = this.maxPossibleScore > 0
       ? Math.round((this.rawScore / this.maxPossibleScore) * 100)
       : 0;
 
-    const clampedAccuracy = Math.max(0, Math.min(100, accuracy));
-
-    // Pass data to Results scene
     this.scene.start('ResultsScene', {
-      accuracy: clampedAccuracy,
+      accuracy: Math.max(0, Math.min(100, accuracy)),
       rawScore: this.rawScore,
       maxScore: this.maxPossibleScore,
       hits: this.hitCount,
       misses: this.missCount,
-      totalCues: this.totalCues,
+      totalCues: this.totalReps,
       circuitType: this.isFridayCircuit ? 'friday_modified' : 'standard',
     });
-  }
-
-  // ---- Resize ----
-
-  private handleResize(width: number, height: number): void {
-    this.cameras.resize(width, height);
-    this.targetZoneY = height * TARGET_ZONE_Y_RATIO;
-
-    if (this.targetZone) {
-      this.targetZone.setPosition(width / 2, this.targetZoneY);
-      this.targetZone.setDisplaySize(width, 60);
-    }
-
-    // Update lanes
-    if (this.isFridayCircuit) {
-      this.lanes = [width * 0.33, width * 0.66];
-    } else {
-      this.lanes = [width * 0.5];
-    }
-
-    if (this.scoreText) this.scoreText.setPosition(16, 16);
-    if (this.progressText) this.progressText.setPosition(width - 16, 16);
   }
 }

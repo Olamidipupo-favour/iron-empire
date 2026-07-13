@@ -8,6 +8,7 @@ const dashboard = document.getElementById('dashboard') as HTMLDivElement;
 const greeting = document.getElementById('greeting') as HTMLParagraphElement;
 const decayAlert = document.getElementById('decay-alert') as HTMLDivElement;
 const decayText = document.getElementById('decay-text') as HTMLSpanElement;
+const avatarImage = document.getElementById('avatar-image') as HTMLImageElement;
 const tierBadge = document.getElementById('tier-badge') as HTMLSpanElement;
 const streakFlame = document.getElementById('streak-flame') as HTMLDivElement;
 const streakValue = document.getElementById('streak-value') as HTMLSpanElement;
@@ -47,7 +48,7 @@ function setProgressBar(fill: HTMLDivElement, current: number, min: number, max:
 
 function getTierCssClass(tier: string): string {
   switch (tier) {
-    case 'V-Taper': return 'v-taper';
+    case 'V-Taper': return 'vtaper';
     case 'Athlete': return 'athlete';
     default: return 'novice';
   }
@@ -68,9 +69,12 @@ function populateDashboard(data: InitResponse): void {
     decayText.textContent = `You missed ${missedDays} day${missedDays > 1 ? 's' : ''}! Stats decayed — get back on track!`;
   }
 
-  // Tier badge
+  // Tier badge & Avatar
+  const tierClass = getTierCssClass(user.physiqueTier);
   tierBadge.textContent = user.physiqueTier;
-  tierBadge.className = `tier-badge ${getTierCssClass(user.physiqueTier)}`;
+  tierBadge.className = `tier-badge ${tierClass}`;
+  avatarImage.src = `assets/avatar_${tierClass}.png`;
+  avatarImage.className = `avatar-image ${tierClass}`;
 
   // Streak
   streakValue.textContent = String(user.currentStreak);
@@ -123,6 +127,8 @@ function showFallbackDashboard(): void {
   greeting.textContent = `Welcome, ${username}`;
   tierBadge.textContent = 'Novice';
   tierBadge.className = 'tier-badge novice';
+  avatarImage.src = 'assets/avatar_novice.png';
+  avatarImage.className = 'avatar-image novice';
   streakValue.textContent = '0';
   weightCurrent.textContent = '75.0 kg';
   muscleCurrent.textContent = '15.0';

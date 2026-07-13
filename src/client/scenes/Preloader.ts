@@ -1,4 +1,5 @@
 import { Scene } from 'phaser';
+import type { InitResponse } from '../../shared/api';
 
 /**
  * Preloader: Generates all game textures programmatically.
@@ -9,6 +10,12 @@ export class Preloader extends Scene {
     super('Preloader');
   }
 
+  preload() {
+    this.load.image('avatar_novice', 'assets/avatar_novice.png');
+    this.load.image('avatar_athlete', 'assets/avatar_athlete.png');
+    this.load.image('avatar_vtaper', 'assets/avatar_vtaper.png');
+  }
+
   create() {
     const { width, height } = this.scale;
 
@@ -17,19 +24,19 @@ export class Preloader extends Scene {
 
     // Title
     this.add
-      .text(width / 2, height * 0.35, '🏋️ IRON EMPIRE', {
-        fontFamily: 'Inter, Arial, sans-serif',
-        fontSize: '28px',
+      .text(width / 2, height * 0.35, 'IRON EMPIRE', {
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '24px',
         color: '#4a7cff',
-        fontStyle: 'bold',
+        fontStyle: 'normal',
       })
       .setOrigin(0.5);
 
     // Subtitle
     this.add
-      .text(width / 2, height * 0.42, 'Preparing your workout…', {
-        fontFamily: 'Inter, Arial, sans-serif',
-        fontSize: '14px',
+      .text(width / 2, height * 0.42, 'Chalking up…', {
+        fontFamily: '"VT323", monospace',
+        fontSize: '20px',
         color: '#8a8ea8',
       })
       .setOrigin(0.5);
@@ -71,9 +78,19 @@ export class Preloader extends Scene {
       },
     });
 
-    // After "loading" completes, start workout
+    // Fetch user tier to pass to WorkoutScene
+    let tier = 'novice';
+    fetch('/api/init')
+      .then(res => res.json())
+      .then((data: InitResponse) => {
+        if (data.user.physiqueTier === 'V-Taper') tier = 'vtaper';
+        else if (data.user.physiqueTier === 'Athlete') tier = 'athlete';
+      })
+      .catch(e => console.error('Failed to load tier in Preloader', e));
+
+    // After "loading" completes, start difficulty selection
     this.time.delayedCall(1200, () => {
-      this.scene.start('WorkoutScene');
+      this.scene.start('DifficultyScene', { tier });
     });
   }
 

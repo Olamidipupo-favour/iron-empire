@@ -11,12 +11,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   </head>
   <body class="app">
     <!-- Loading Skeleton -->
     <div class="loading-container" id="loading-container">
       <div class="loading-spinner"></div>
-      <p class="loading-text">Entering the Iron Empire…</p>
+      <p class="loading-text">Chalking up…</p>
     </div>
 
     <!-- Main Dashboard (hidden until data loads) -->
@@ -34,6 +35,11 @@
         <span class="decay-text" id="decay-text"></span>
       </div>
 
+      <!-- Avatar Section -->
+      <div class="avatar-container">
+        <img id="avatar-image" class="avatar-image" src="" alt="Avatar" />
+      </div>
+
       <!-- Status Panel -->
       <div class="panel status-panel">
         <div class="panel-header">
@@ -45,7 +51,7 @@
         <div class="stat-row">
           <div class="stat-icon" id="streak-flame">🔥</div>
           <div class="stat-info">
-            <span class="stat-label">Daily Streak</span>
+            <span class="stat-label">Gym Days</span>
             <span class="stat-value" id="streak-value">0</span>
           </div>
         </div>
@@ -58,7 +64,6 @@
             <div class="progress-container">
               <div class="progress-bar" id="weight-bar">
                 <div class="progress-fill" id="weight-fill"></div>
-                <div class="progress-shimmer"></div>
               </div>
               <div class="progress-labels">
                 <span id="weight-current">75.0 kg</span>
@@ -76,7 +81,6 @@
             <div class="progress-container">
               <div class="progress-bar" id="muscle-bar">
                 <div class="progress-fill" id="muscle-fill"></div>
-                <div class="progress-shimmer"></div>
               </div>
               <div class="progress-labels">
                 <span id="muscle-current">15.0</span>
@@ -90,7 +94,7 @@
         <div class="stat-row">
           <div class="stat-icon">⭐</div>
           <div class="stat-info">
-            <span class="stat-label">Total Points</span>
+            <span class="stat-label">Total Volume (lbs)</span>
             <span class="stat-value" id="points-value">0</span>
           </div>
         </div>
@@ -99,14 +103,13 @@
       <!-- Community Panel -->
       <div class="panel community-panel">
         <div class="panel-header">
-          <span class="panel-label">Community Gym</span>
+          <span class="panel-label">Iron Brotherhood</span>
           <span class="gym-tier-badge" id="gym-tier-badge"></span>
         </div>
         <div class="gym-name" id="gym-name">Garage Gym</div>
         <div class="progress-container">
           <div class="progress-bar gym-bar">
             <div class="progress-fill gym-fill" id="gym-fill"></div>
-            <div class="progress-shimmer"></div>
           </div>
           <div class="progress-labels">
             <span id="gym-points">0 pts</span>
@@ -118,7 +121,7 @@
       <!-- Action Button -->
       <button class="action-button" id="start-button">
         <span class="action-icon">⚡</span>
-        <span class="action-text">Start Daily Routine</span>
+        <span class="action-text">Hit The Iron</span>
       </button>
 
       <!-- Footer -->
