@@ -80,17 +80,21 @@ export class Preloader extends Scene {
 
     // Fetch user tier to pass to WorkoutScene
     let tier = 'novice';
+    let bodyType = 'skinny-fat';
+    let dailySplit = 'Full Body';
     fetch('/api/init')
       .then(res => res.json())
       .then((data: InitResponse) => {
         if (data.user.physiqueTier === 'V-Taper') tier = 'vtaper';
         else if (data.user.physiqueTier === 'Athlete') tier = 'athlete';
+        if (data.user.bodyType) bodyType = data.user.bodyType;
+        if (data.dailySplit) dailySplit = data.dailySplit;
       })
       .catch(e => console.error('Failed to load tier in Preloader', e));
 
     // After "loading" completes, start difficulty selection
     this.time.delayedCall(1200, () => {
-      this.scene.start('DifficultyScene', { tier });
+      this.scene.start('DifficultyScene', { tier, bodyType, dailySplit });
     });
   }
 

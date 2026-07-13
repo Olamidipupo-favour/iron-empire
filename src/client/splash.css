@@ -382,6 +382,97 @@
   color: var(--text-muted);
 }
 
+/* ---- Split Indicator ---- */
+.split-indicator {
+  margin-top: 10px;
+  background: rgba(230, 126, 34, 0.15);
+  border: 1px solid var(--accent-orange);
+  padding: 6px 12px;
+  border-radius: 4px;
+  display: inline-block;
+  font-size: 14px;
+}
+.split-label {
+  color: var(--text-secondary);
+}
+.split-text {
+  color: var(--accent-orange);
+  font-weight: bold;
+}
+
+/* ---- Tip Module ---- */
+.tip-module {
+  background: rgba(39, 174, 96, 0.1);
+  border-left: 4px solid var(--accent-green);
+  padding: 12px 16px;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tip-icon {
+  font-size: 1.5rem;
+}
+.tip-text {
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+/* ---- Meal Panel ---- */
+.meal-panel {
+  border-color: rgba(39, 174, 96, 0.2);
+}
+.meal-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.status-badge {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: normal;
+}
+.status-badge.pending {
+  background: rgba(243, 156, 18, 0.2);
+  color: var(--accent-gold);
+  border: 1px solid rgba(243, 156, 18, 0.4);
+}
+.status-badge.completed {
+  background: rgba(39, 174, 96, 0.2);
+  color: var(--accent-green);
+  border: 1px solid rgba(39, 174, 96, 0.4);
+}
+
+.meal-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--accent-green);
+  background: #111;
+  color: var(--accent-green);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+}
+.meal-button:hover:not(:disabled) {
+  background: var(--accent-green);
+  color: #111;
+}
+.meal-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
 /* ---- Community Panel specifics ---- */
 
 .community-panel {

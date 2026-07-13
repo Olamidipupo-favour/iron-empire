@@ -5,13 +5,17 @@ export type DifficultyLevel = 'light' | 'standard' | 'heavy';
 
 export class DifficultyScene extends Scene {
   private tier: string = 'novice';
+  private bodyType: string = 'skinny-fat';
+  private dailySplit: string = 'Full Body';
 
   constructor() {
     super('DifficultyScene');
   }
 
-  init(data: { tier?: string }): void {
+  init(data: { tier?: string, bodyType?: string, dailySplit?: string }): void {
     this.tier = data.tier ?? 'novice';
+    this.bodyType = data.bodyType ?? 'skinny-fat';
+    this.dailySplit = data.dailySplit ?? 'Full Body';
   }
 
   create(): void {
@@ -78,7 +82,7 @@ export class DifficultyScene extends Scene {
     // Fade out and transition
     this.cameras.main.fadeOut(300, 10, 10, 15);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('WorkoutScene', { tier: this.tier, difficulty });
+      this.scene.start('WorkoutScene', { tier: this.tier, difficulty, bodyType: this.bodyType, dailySplit: this.dailySplit });
     });
   }
 }

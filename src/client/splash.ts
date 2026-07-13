@@ -23,6 +23,10 @@ const gymFill = document.getElementById('gym-fill') as HTMLDivElement;
 const gymPoints = document.getElementById('gym-points') as HTMLSpanElement;
 const gymNext = document.getElementById('gym-next') as HTMLSpanElement;
 const startButton = document.getElementById('start-button') as HTMLButtonElement;
+const dailySplit = document.getElementById('daily-split') as HTMLSpanElement;
+const dailyTip = document.getElementById('daily-tip') as HTMLSpanElement;
+const mealStatus = document.getElementById('meal-status') as HTMLSpanElement;
+const logMealButton = document.getElementById('log-meal-button') as HTMLButtonElement;
 
 // ---- Constants ----
 
@@ -114,6 +118,27 @@ function populateDashboard(data: InitResponse): void {
     });
   }
 
+  // Daily Split and Tip
+  dailySplit.textContent = data.dailySplit;
+  dailyTip.textContent = data.dailyTip;
+
+  // Meal Status
+  if (data.mealLoggedToday) {
+    mealStatus.textContent = 'Completed';
+    mealStatus.className = 'status-badge completed';
+    logMealButton.disabled = true;
+    logMealButton.style.opacity = '0.5';
+    logMealButton.style.cursor = 'not-allowed';
+    logMealButton.innerHTML = '<span class="action-icon">✅</span><span class="action-text">Protein Hit!</span>';
+  } else {
+    mealStatus.textContent = 'Pending';
+    mealStatus.className = 'status-badge pending';
+    logMealButton.disabled = false;
+    logMealButton.style.opacity = '1';
+    logMealButton.style.cursor = 'pointer';
+    logMealButton.innerHTML = '<span class="action-icon">🥩</span><span class="action-text">Log Protein Hit</span>';
+  }
+
   // Show dashboard, hide loading
   loadingContainer.style.display = 'none';
   dashboard.style.display = 'flex';
@@ -152,6 +177,30 @@ function showFallbackDashboard(): void {
 
 startButton.addEventListener('click', (e) => {
   requestExpandedMode(e, 'game');
+});
+
+logMealButton.addEventListener('click', async () => {
+  if (logMealButton.disabled) return;
+  
+  logMealButton.disabled = true;
+  logMealButton.innerHTML = '<span class="action-text">Logging...</span>';
+
+  try {
+    const response = await fetch('/api/meal/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proteinHit: true })
+    });
+    
+    if (!response.ok) throw new Error('Failed to log meal');
+    
+    // Refresh dashboard to show new stats and completed status
+    await init();
+  } catch (err) {
+    console.error(err);
+    logMealButton.disabled = false;
+    logMealButton.innerHTML = '<span class="action-icon">🥩</span><span class="action-text">Log Protein Hit</span>';
+  }
 });
 
 // ---- Init ----

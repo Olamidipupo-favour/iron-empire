@@ -27,6 +27,10 @@
         <div class="header-icon">🏋️</div>
         <h1 class="header-title">Iron Empire</h1>
         <p class="header-subtitle" id="greeting"></p>
+        <div class="split-indicator">
+          <span class="split-label">Today's Split: </span>
+          <span id="daily-split" class="split-text">Full Body</span>
+        </div>
       </div>
 
       <!-- Decay Warning (shown only if decay applied) -->
@@ -35,9 +39,14 @@
         <span class="decay-text" id="decay-text"></span>
       </div>
 
-      <!-- Avatar Section -->
       <div class="avatar-container">
         <img id="avatar-image" class="avatar-image" src="" alt="Avatar" />
+      </div>
+
+      <!-- Health Tip Module -->
+      <div class="tip-module">
+        <span class="tip-icon">💡</span>
+        <span class="tip-text" id="daily-tip">Consistency is key.</span>
       </div>
 
       <!-- Status Panel -->
@@ -98,6 +107,19 @@
             <span class="stat-value" id="points-value">0</span>
           </div>
         </div>
+      </div>
+
+      <!-- Meal Log Action -->
+      <div class="panel meal-panel">
+        <div class="panel-header">
+          <span class="panel-label">Nutrition Check</span>
+          <span class="status-badge pending" id="meal-status">Pending</span>
+        </div>
+        <p class="meal-desc">Did you hit your protein macros today?</p>
+        <button class="meal-button" id="log-meal-button">
+          <span class="action-icon">🥩</span>
+          <span class="action-text">Log Protein Hit</span>
+        </button>
       </div>
 
       <!-- Community Panel -->

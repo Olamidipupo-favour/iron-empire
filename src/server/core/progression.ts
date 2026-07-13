@@ -2,7 +2,7 @@
 // Iron Empire — Progression & Decay Logic (Pure Functions)
 // ============================================================
 
-import type { PhysiqueTier } from '../../shared/api';
+import type { PhysiqueTier, BodyType, SplitType } from '../../shared/api';
 
 // Decay constant λ — controls how aggressively stats decay per missed day
 const DECAY_LAMBDA = 0.05;
@@ -18,6 +18,49 @@ const GYM_TIER_NAMES = [
   'Elite Arena',       // Tier 5
   'Iron Temple',       // Tier 6
 ] as const;
+
+// ---- Generators & Daily Mechanics ----
+
+export const getRandomBodyType = (): BodyType => {
+  const types: BodyType[] = ['skinny', 'fat', 'skinny-fat'];
+  return types[Math.floor(Math.random() * types.length)] ?? 'skinny-fat';
+};
+
+export const getDailySplit = (dateString?: string): SplitType => {
+  const date = dateString ? new Date(dateString) : new Date();
+  const day = date.getDay(); // 0 = Sunday, 1 = Monday, ...
+  
+  switch (day) {
+    case 1: return 'Chest & Triceps';
+    case 2: return 'Back & Biceps';
+    case 3: return 'Active Recovery';
+    case 4: return 'Legs';
+    case 5: return 'Shoulders & Core';
+    case 6: return 'Full Body';
+    case 0: return 'Rest';
+    default: return 'Full Body';
+  }
+};
+
+const HEALTH_TIPS = [
+  "Protein synthesis peaks within 24 hours of training. Hit your macros!",
+  "Sleep is when the body builds muscle. Aim for 7-9 hours.",
+  "Progressive overload is the key to growth. Lift slightly heavier or do more reps.",
+  "Hydration affects strength. Drink water before, during, and after your workout.",
+  "Compound exercises like squats and deadlifts release more growth hormone.",
+  "Don't neglect mobility! Stretching prevents injury and improves form.",
+  "Carbs are energy. Don't fear them around your workout window.",
+  "Consistency beats intensity. Showing up on the days you don't want to builds discipline.",
+  "A caloric surplus is needed to build muscle, but don't dirty bulk. Eat clean!",
+  "Active recovery reduces lactic acid buildup faster than complete rest."
+];
+
+export const getDailyTip = (): string => {
+  const today = new Date();
+  const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
+  const tip = HEALTH_TIPS[dayOfYear % HEALTH_TIPS.length];
+  return tip !== undefined ? tip : HEALTH_TIPS[0]!;
+};
 
 // ---- Decay ----
 

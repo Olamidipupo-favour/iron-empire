@@ -6,6 +6,9 @@ import type {
   WorkoutSubmitResponse,
   UserProfile,
   CommunityGym,
+  MealLogRequest,
+  MealLogResponse,
+  BodyType,
 } from '../../shared/api';
 import {
   calculateDecay,
@@ -18,6 +21,9 @@ import {
   getPointsToNextTier,
   getGymTierName,
   getTodayDateString,
+  getRandomBodyType,
+  getDailySplit,
+  getDailyTip,
 } from '../core/progression';
 
 type ErrorResponse = {
@@ -57,6 +63,8 @@ async function loadUserProfile(username: string): Promise<{
   let streak = isNewUser ? DEFAULTS.streak : parseInt(data.currentStreak ?? String(DEFAULTS.streak), 10);
   const totalPoints = isNewUser ? DEFAULTS.points : parseInt(data.totalPoints ?? String(DEFAULTS.points), 10);
   const lastLogin = isNewUser ? null : (data.lastLoginDate ?? null);
+  const bodyType = isNewUser ? getRandomBodyType() : (data.bodyType as BodyType ?? 'skinny-fat');
+  const lastMealLogDate = isNewUser ? null : (data.lastMealLogDate ?? null);
 
   // Calculate missed days and apply decay
   const rawDaysSince = lastLogin ? Math.floor((new Date(today).getTime() - new Date(lastLogin).getTime()) / (1000 * 60 * 60 * 24)) : 0;
@@ -75,15 +83,19 @@ async function loadUserProfile(username: string): Promise<{
 
   const tier = determinePhysiqueTier(weight, muscle);
 
-  // Persist updated profile
-  await redis.hSet(key, {
+  const updates: Record<string, string> = {
     currentWeightKg: weight.toFixed(2),
     muscleMass: muscle.toFixed(2),
     physiqueTier: tier,
+    bodyType,
     currentStreak: String(streak),
     totalPoints: String(totalPoints),
     lastLoginDate: today,
-  });
+  };
+  if (lastMealLogDate) updates.lastMealLogDate = lastMealLogDate;
+
+  // Persist updated profile
+  await redis.hSet(key, updates);
 
   return {
     profile: {
@@ -91,8 +103,10 @@ async function loadUserProfile(username: string): Promise<{
       currentWeightKg: parseFloat(weight.toFixed(2)),
       muscleMass: parseFloat(muscle.toFixed(2)),
       physiqueTier: tier,
+      bodyType,
       currentStreak: streak,
       lastLoginDate: today,
+      lastMealLogDate,
       totalPoints,
     },
     decayApplied,
@@ -134,12 +148,19 @@ api.get('/init', async (c) => {
     const { profile, decayApplied, missedDays } = await loadUserProfile(name);
     const gym = await loadCommunityGym();
 
+    const dailySplit = getDailySplit();
+    const dailyTip = getDailyTip();
+    const mealLoggedToday = profile.lastMealLogDate === getTodayDateString();
+
     return c.json<InitResponse>({
       type: 'init',
       user: profile,
       gym,
       decayApplied,
       missedDays,
+      dailySplit,
+      dailyTip,
+      mealLoggedToday,
     });
   } catch (error) {
     console.error('API Init Error:', error);
@@ -180,12 +201,13 @@ api.post('/workout/submit', async (c) => {
     const communityPointsEarned = calculateCommunityPoints(score);
     const growthApplied = score > 70;
 
-    // Load current stats
     const data = await redis.hGetAll(userKey);
     let weight = parseFloat(data?.currentWeightKg ?? String(DEFAULTS.weight));
     let muscle = parseFloat(data?.muscleMass ?? String(DEFAULTS.muscle));
     let streak = parseInt(data?.currentStreak ?? String(DEFAULTS.streak), 10);
     let totalPoints = parseInt(data?.totalPoints ?? String(DEFAULTS.points), 10);
+    const bodyType = (data?.bodyType as BodyType) ?? 'skinny-fat';
+    const lastMealLogDate = data?.lastMealLogDate ?? null;
 
     // Apply growth
     if (growthApplied) {
@@ -199,15 +221,19 @@ api.post('/workout/submit', async (c) => {
 
     const tier = determinePhysiqueTier(weight, muscle);
 
-    // Persist user updates
-    await redis.hSet(userKey, {
+    const updates: Record<string, string> = {
       currentWeightKg: weight.toFixed(2),
       muscleMass: muscle.toFixed(2),
       physiqueTier: tier,
       currentStreak: String(streak),
       totalPoints: String(totalPoints),
       lastLoginDate: today,
-    });
+    };
+    if (bodyType) updates.bodyType = bodyType;
+    if (lastMealLogDate) updates.lastMealLogDate = lastMealLogDate;
+
+    // Persist user updates
+    await redis.hSet(userKey, updates);
 
     // Add to community gym pool
     if (communityPointsEarned > 0) {
@@ -234,8 +260,10 @@ api.post('/workout/submit', async (c) => {
       currentWeightKg: weight,
       muscleMass: muscle,
       physiqueTier: tier,
+      bodyType,
       currentStreak: streak,
       lastLoginDate: today,
+      lastMealLogDate,
       totalPoints,
     };
 
@@ -255,5 +283,62 @@ api.post('/workout/submit', async (c) => {
       { status: 'error', message: `Workout submission failed: ${message}` },
       400
     );
+  }
+});
+
+/**
+ * POST /api/meal/log
+ * Log daily nutrition and grant a small growth boost if protein hit.
+ */
+api.post('/meal/log', async (c) => {
+  try {
+    const username = await reddit.getCurrentUsername();
+    const name = username ?? 'anonymous';
+    const body = await c.req.json<MealLogRequest>();
+    
+    if (!body.proteinHit) {
+      return c.json<MealLogResponse>({
+        success: true,
+        message: 'Meal logged without protein hit.',
+        growthApplied: false,
+        weightDelta: 0,
+        muscleDelta: 0
+      });
+    }
+
+    const userKey = `users:${name}`;
+    const today = getTodayDateString();
+    const data = await redis.hGetAll(userKey);
+    
+    if (data?.lastMealLogDate === today) {
+      return c.json<ErrorResponse>({ status: 'error', message: 'Meal already logged today' }, 400);
+    }
+
+    let weight = parseFloat(data?.currentWeightKg ?? String(DEFAULTS.weight));
+    let muscle = parseFloat(data?.muscleMass ?? String(DEFAULTS.muscle));
+    
+    const weightDelta = 0.05;
+    const muscleDelta = 0.1;
+    weight += weightDelta;
+    muscle += muscleDelta;
+    const tier = determinePhysiqueTier(weight, muscle);
+
+    await redis.hSet(userKey, {
+      currentWeightKg: weight.toFixed(2),
+      muscleMass: muscle.toFixed(2),
+      physiqueTier: tier,
+      lastMealLogDate: today
+    });
+
+    return c.json<MealLogResponse>({
+      success: true,
+      message: 'Protein hit! Stats increased.',
+      growthApplied: true,
+      weightDelta,
+      muscleDelta
+    });
+  } catch (error) {
+    console.error('Meal Log Error:', error);
+    return c.json<ErrorResponse>({ status: 'error', message: 'Failed to log meal' }, 400);
   }
 });

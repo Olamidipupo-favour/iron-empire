@@ -41,6 +41,8 @@ export class WorkoutScene extends Scene {
   private maxPossibleScore: number = 0;
   private needleSpeed: number = 600; // ms per half-swing
   private difficulty: DifficultyLevel = 'standard';
+  private bodyType: string = 'skinny-fat';
+  private dailySplit: string = 'Full Body';
 
   // State
   private currentRep: number = 0;
@@ -52,7 +54,12 @@ export class WorkoutScene extends Scene {
   private isComplete: boolean = false;
 
   // Game Objects
-  private avatarImage!: Phaser.GameObjects.Image;
+  private avatarContainer!: Phaser.GameObjects.Container;
+  private head!: Phaser.GameObjects.Arc;
+  private torso!: Phaser.GameObjects.Rectangle;
+  private leftArm!: Phaser.GameObjects.Rectangle;
+  private rightArm!: Phaser.GameObjects.Rectangle;
+  private legs!: Phaser.GameObjects.Rectangle;
   private barbellContainer!: Phaser.GameObjects.Container;
   private needle!: Phaser.GameObjects.Rectangle;
   private needleTween!: Phaser.Tweens.Tween;
@@ -72,9 +79,11 @@ export class WorkoutScene extends Scene {
     super('WorkoutScene');
   }
 
-  init(data: { tier?: string, difficulty?: DifficultyLevel }): void {
+  init(data: { tier?: string, difficulty?: DifficultyLevel, bodyType?: string, dailySplit?: string }): void {
     this.tier = data.tier ?? 'novice';
     this.difficulty = data.difficulty ?? 'standard';
+    this.bodyType = data.bodyType ?? 'skinny-fat';
+    this.dailySplit = data.dailySplit ?? 'Full Body';
     this.currentRep = 0;
     this.hitCount = 0;
     this.missCount = 0;
@@ -136,8 +145,7 @@ export class WorkoutScene extends Scene {
 
     // ---- Visual Character ----
     const avatarY = height / 2 - 40;
-    this.avatarImage = this.add.image(width / 2, avatarY, `avatar_${this.tier}`);
-    this.avatarImage.setScale(1.2); // Make lifter prominent
+    this.createPaperDoll(width / 2, avatarY);
 
     // Pulse aura behind avatar
     const auraColor = this.tier === 'vtaper' ? 0xf39c12 : this.tier === 'athlete' ? 0x7f8c8d : 0xc4a265;
@@ -152,7 +160,7 @@ export class WorkoutScene extends Scene {
     });
 
     // Bring avatar to front above aura
-    this.avatarImage.setDepth(2);
+    this.avatarContainer.setDepth(2);
 
     // ---- Barbell ----
     this.barbellContainer = this.add.container(width / 2, avatarY + 50);
@@ -248,6 +256,52 @@ export class WorkoutScene extends Scene {
 
     // ---- Countdown ----
     this.startCountdown();
+  }
+
+  // ---- Paper Doll ----
+
+  private createPaperDoll(x: number, y: number): void {
+    this.avatarContainer = this.add.container(x, y);
+
+    let torsoWidth = 40;
+    let torsoHeight = 60;
+    let armWidth = 15;
+    let armHeight = 50;
+    let legWidth = 40;
+    
+    if (this.tier === 'vtaper') {
+      torsoWidth = 60;
+      armWidth = 20;
+    } else if (this.tier === 'athlete') {
+      torsoWidth = 50;
+      armWidth = 18;
+    }
+    
+    if (this.bodyType === 'fat') {
+      torsoWidth += 20;
+      legWidth += 10;
+    } else if (this.bodyType === 'skinny') {
+      torsoWidth -= 10;
+      armWidth -= 5;
+    }
+
+    const skinColor = 0xffccaa;
+    const shirtColor = 0xbdc3c7;
+    const pantsColor = 0x333333;
+
+    this.torso = this.add.rectangle(0, 0, torsoWidth, torsoHeight, shirtColor);
+    
+    this.leftArm = this.add.rectangle(-torsoWidth / 2 - armWidth / 2, -torsoHeight / 2 + 10, armWidth, armHeight, skinColor);
+    this.leftArm.setOrigin(0.5, 0.1); 
+    
+    this.rightArm = this.add.rectangle(torsoWidth / 2 + armWidth / 2, -torsoHeight / 2 + 10, armWidth, armHeight, skinColor);
+    this.rightArm.setOrigin(0.5, 0.1); 
+    
+    this.legs = this.add.rectangle(0, torsoHeight / 2 + 15, legWidth, 30, pantsColor);
+    this.head = this.add.circle(0, -torsoHeight / 2 - 15, 15, skinColor);
+
+    this.avatarContainer.add([this.legs, this.torso, this.leftArm, this.rightArm, this.head]);
+    this.avatarContainer.setScale(1.2);
   }
 
   // ---- Countdown ----
@@ -377,15 +431,36 @@ export class WorkoutScene extends Scene {
     const liftY = startY - 70; // Push bar up
     
     if (rating !== 'miss') {
-      // Successful lift animation
+      // Successful lift animation based on Daily Split
+      const split = this.dailySplit.toLowerCase();
       
-      // Avatar bump to simulate effort
-      this.tweens.add({
-        targets: this.avatarImage,
-        y: this.avatarImage.y + 5,
-        duration: 100,
-        yoyo: true,
-      });
+      if (split.includes('chest') || split.includes('back') || split.includes('arm')) {
+        // Arm Day / Upper body - Rotate arms
+        this.tweens.add({
+          targets: this.leftArm,
+          angle: { from: 0, to: 90 }, 
+          duration: 150, yoyo: true,
+        });
+        this.tweens.add({
+          targets: this.rightArm,
+          angle: { from: 0, to: -90 }, 
+          duration: 150, yoyo: true,
+        });
+      } else if (split.includes('leg')) {
+        // Leg Day - Squat down
+        this.tweens.add({
+          targets: this.avatarContainer,
+          y: this.avatarContainer.y + 30, 
+          duration: 150, yoyo: true,
+        });
+      } else {
+        // Default / Shoulders - standard bump
+        this.tweens.add({
+          targets: this.avatarContainer,
+          y: this.avatarContainer.y + 10,
+          duration: 150, yoyo: true,
+        });
+      }
 
       // Barbell goes up then down
       this.tweens.add({
