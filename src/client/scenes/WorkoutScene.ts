@@ -41,7 +41,6 @@ export class WorkoutScene extends Scene {
   private maxPossibleScore: number = 0;
   private needleSpeed: number = 600; // ms per half-swing
   private difficulty: DifficultyLevel = 'standard';
-  private bodyType: string = 'skinny-fat';
   private dailySplit: string = 'Full Body';
 
   // State
@@ -55,11 +54,9 @@ export class WorkoutScene extends Scene {
 
   // Game Objects
   private avatarContainer!: Phaser.GameObjects.Container;
-  private head!: Phaser.GameObjects.Arc;
-  private torso!: Phaser.GameObjects.Rectangle;
+  private avatarImage!: Phaser.GameObjects.Image;
   private leftArm!: Phaser.GameObjects.Rectangle;
   private rightArm!: Phaser.GameObjects.Rectangle;
-  private legs!: Phaser.GameObjects.Rectangle;
   private barbellContainer!: Phaser.GameObjects.Container;
   private needle!: Phaser.GameObjects.Rectangle;
   private needleTween!: Phaser.Tweens.Tween;
@@ -82,7 +79,6 @@ export class WorkoutScene extends Scene {
   init(data: { tier?: string, difficulty?: DifficultyLevel, bodyType?: string, dailySplit?: string }): void {
     this.tier = data.tier ?? 'novice';
     this.difficulty = data.difficulty ?? 'standard';
-    this.bodyType = data.bodyType ?? 'skinny-fat';
     this.dailySplit = data.dailySplit ?? 'Full Body';
     this.currentRep = 0;
     this.hitCount = 0;
@@ -145,7 +141,7 @@ export class WorkoutScene extends Scene {
 
     // ---- Visual Character ----
     const avatarY = height / 2 - 40;
-    this.createPaperDoll(width / 2, avatarY);
+    this.createAvatar(width / 2, avatarY);
 
     // Pulse aura behind avatar
     const auraColor = this.tier === 'vtaper' ? 0xf39c12 : this.tier === 'athlete' ? 0x7f8c8d : 0xc4a265;
@@ -258,49 +254,37 @@ export class WorkoutScene extends Scene {
     this.startCountdown();
   }
 
-  // ---- Paper Doll ----
+  // ---- Avatar ----
 
-  private createPaperDoll(x: number, y: number): void {
+  private createAvatar(x: number, y: number): void {
     this.avatarContainer = this.add.container(x, y);
 
-    let torsoWidth = 40;
-    let torsoHeight = 60;
-    let armWidth = 15;
-    let armHeight = 50;
-    let legWidth = 40;
-    
-    if (this.tier === 'vtaper') {
-      torsoWidth = 60;
-      armWidth = 20;
-    } else if (this.tier === 'athlete') {
-      torsoWidth = 50;
-      armWidth = 18;
-    }
-    
-    if (this.bodyType === 'fat') {
-      torsoWidth += 20;
-      legWidth += 10;
-    } else if (this.bodyType === 'skinny') {
-      torsoWidth -= 10;
-      armWidth -= 5;
-    }
+    // The original avatar image
+    this.avatarImage = this.add.image(0, 0, `avatar_${this.tier}`);
+    // Scale it down since original images are 1024x1024
+    this.avatarImage.setScale(0.3);
 
+    // Create arms that we can animate
     const skinColor = 0xffccaa;
-    const shirtColor = 0xbdc3c7;
-    const pantsColor = 0x333333;
+    let armWidth = 20;
+    const armHeight = 80;
 
-    this.torso = this.add.rectangle(0, 0, torsoWidth, torsoHeight, shirtColor);
-    
-    this.leftArm = this.add.rectangle(-torsoWidth / 2 - armWidth / 2, -torsoHeight / 2 + 10, armWidth, armHeight, skinColor);
+    if (this.tier === 'vtaper') {
+      armWidth = 24;
+    } else if (this.tier === 'athlete') {
+      armWidth = 22;
+    }
+
+    // Left arm
+    this.leftArm = this.add.rectangle(-50, -20, armWidth, armHeight, skinColor);
     this.leftArm.setOrigin(0.5, 0.1); 
-    
-    this.rightArm = this.add.rectangle(torsoWidth / 2 + armWidth / 2, -torsoHeight / 2 + 10, armWidth, armHeight, skinColor);
-    this.rightArm.setOrigin(0.5, 0.1); 
-    
-    this.legs = this.add.rectangle(0, torsoHeight / 2 + 15, legWidth, 30, pantsColor);
-    this.head = this.add.circle(0, -torsoHeight / 2 - 15, 15, skinColor);
 
-    this.avatarContainer.add([this.legs, this.torso, this.leftArm, this.rightArm, this.head]);
+    // Right arm
+    this.rightArm = this.add.rectangle(50, -20, armWidth, armHeight, skinColor);
+    this.rightArm.setOrigin(0.5, 0.1); 
+
+    this.avatarContainer.add([this.avatarImage, this.leftArm, this.rightArm]);
+    // The previous implementation scaled the image by 1.2, but if we scale the container:
     this.avatarContainer.setScale(1.2);
   }
 
@@ -431,22 +415,22 @@ export class WorkoutScene extends Scene {
     const liftY = startY - 70; // Push bar up
     
     if (rating !== 'miss') {
-      // Successful lift animation based on Daily Split
+      // Always rotate arms upwards to simulate lifting
+      this.tweens.add({
+        targets: this.leftArm,
+        angle: { from: 0, to: 120 }, 
+        duration: 150, yoyo: true,
+      });
+      this.tweens.add({
+        targets: this.rightArm,
+        angle: { from: 0, to: -120 }, 
+        duration: 150, yoyo: true,
+      });
+
+      // Animate the avatar container based on Daily Split
       const split = this.dailySplit.toLowerCase();
       
-      if (split.includes('chest') || split.includes('back') || split.includes('arm')) {
-        // Arm Day / Upper body - Rotate arms
-        this.tweens.add({
-          targets: this.leftArm,
-          angle: { from: 0, to: 90 }, 
-          duration: 150, yoyo: true,
-        });
-        this.tweens.add({
-          targets: this.rightArm,
-          angle: { from: 0, to: -90 }, 
-          duration: 150, yoyo: true,
-        });
-      } else if (split.includes('leg')) {
+      if (split.includes('leg')) {
         // Leg Day - Squat down
         this.tweens.add({
           targets: this.avatarContainer,
