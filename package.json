@@ -5,9 +5,9 @@
   "license": "BSD-3-Clause",
   "type": "module",
   "scripts": {
-    "build": "node api.js && vite build",
+    "build": "node init && vite build",
     "deploy": "npm run type-check && npm run lint && devvit upload",
-    "dev": "node api.js && devvit playtest",
+    "dev": "node init && devvit playtest",
     "launch": "npm run deploy && devvit publish",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "login": "devvit login",
